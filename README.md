@@ -2,7 +2,7 @@
 
 > An end-to-end automation workflow that takes a company name and returns an enriched lead profile + a personalized cold email — all on the free tier.
 
-![Workflow](docs/screenshots/workflow.png)
+![Workflow](workflow.png)
 
 ![n8n](https://img.shields.io/badge/Built%20with-n8n-FF6D5A?style=flat-square&logo=n8n)
 ![Groq](https://img.shields.io/badge/AI-Groq%20LLaMA3-7C3AED?style=flat-square)
@@ -82,9 +82,9 @@ Prepare Lead (normalize + format company name)
 
 ## 🗺️ Workflow Diagram
 
-![Workflow](docs/screenshots/workflow.png)
+![Workflow](workflow.png)
 
-> Export your workflow screenshot from n8n canvas and place it at `docs/screenshots/workflow.png`
+
 
 ---
 
