@@ -48,7 +48,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer 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"
+              "value": "Bearer gsk_past_your_grok_api"
             },
             {
               "name": "Content-Type",
