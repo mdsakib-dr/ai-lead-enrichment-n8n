@@ -1,0 +1,687 @@
+{
+  "name": "Automation Task",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -544
+      ],
+      "id": "5f4f5663-a63e-47ed-9ed1-6f4309d2ef08",
+      "name": "Menual trigger "
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Transform Data (FINAL WORKING VERSION) ───────────\n\n// STEP 1: Original lead\nconst lead = $('Prepare Lead').item.json;\n\n// STEP 2: Clearbit for domain\nconst clearbitRaw = $('HTTP Request - Clearbit').item.json;\nlet clearbitResults = [];\nif (Array.isArray(clearbitRaw)) clearbitResults = clearbitRaw;\nelse if (Array.isArray(clearbitRaw.body)) clearbitResults = clearbitRaw.body;\n\n// STEP 3: Wikipedia response\n// extract field has the full description text\nconst wiki = $('HTTP Request - Wikipedia').item.json;\nconst extract = wiki?.extract || wiki?.description || '';\nconst wikiTitle = wiki?.title || '';\n\n// STEP 4: Fuzzy match Clearbit for domain\nconst norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');\nconst nameNorm = norm(lead.companyName);\nconst match = clearbitResults.find(r => norm(r.name) === nameNorm)\n  || clearbitResults.find(r => norm(r.name).startsWith(nameNorm))\n  || clearbitResults[0]\n  || null;\n\n// STEP 5: Domain\nconst cleanD = (d) => (d && d !== 'null' && d !== 'undefined') ? d : '';\nconst domain = cleanD(match?.domain)\n  || cleanD(lead.domain)\n  || (norm(lead.companyName) + '.com');\n\n\n\n\n// STEP 6: Extract LOCATION from Wikipedia extract text\nlet location = '';\nconst locPatterns = [\n  /based in ([A-Z][a-zA-Z\\s]+?)(?:,|\\.|and|\\s+is|\\s+was|\\s+that)/,\n  /headquartered in ([A-Z][a-zA-Z\\s]+?)(?:,|\\.|and|\\s+is|\\s+was)/,\n  /located in ([A-Z][a-zA-Z\\s]+?)(?:,|\\.|and|\\s+is|\\s+was)/,\n  /founded in ([A-Z][a-zA-Z\\s]+?)(?:,|\\.|and|\\s+is|\\s+was)/,\n  /in ([A-Z][a-zA-Z]+),\\s*(Bangladesh|India|Pakistan|USA|UK|Singapore|Nigeria)/,\n  /([A-Z][a-zA-Z]+),\\s*(Bangladesh|India|Pakistan|USA|UK|Singapore|Nigeria)/,\n];\nconst extractText = extract || '';\nfor (const p of locPatterns) {\n  const found = extractText.match(p);\n  if (found) {\n    location = found[1].trim();\n    // Add country if captured in group 2\n    if (found[2]) location = `${found[1].trim()}, ${found[2]}`;\n    break;\n  }\n}\n    \n\n\n\n\n\n\n// STEP 7: Extract NICHE from Wikipedia extract text\nlet niche = '';\nconst nicheMap = [\n  { keywords: ['ride-sharing','ridesharing','ride sharing','motorcycle taxi'], label: 'Ride-Sharing Tech' },\n  { keywords: ['logistics','courier','last-mile','freight','shipping'],        label: 'Logistics Tech' },\n  { keywords: ['food delivery','restaurant','meal'],                           label: 'Food Tech' },\n  { keywords: ['e-commerce','ecommerce','online shopping','online store'],     label: 'E-Commerce' },\n  { keywords: ['fintech','financial technology','payments','mobile banking'],  label: 'Fintech' },\n  { keywords: ['software as a service','saas','cloud software'],               label: 'SaaS' },\n  { keywords: ['artificial intelligence','machine learning',' ai '],           label: 'AI Tech' },\n  { keywords: ['health','healthcare','telemedicine','medical'],                label: 'Health Tech' },\n  { keywords: ['education','edtech','e-learning','online learning'],           label: 'EdTech' },\n  { keywords: ['real estate','property','proptech'],                           label: 'PropTech' },\n  { keywords: ['travel','tourism','hotel','hospitality'],                      label: 'Travel Tech' },\n  { keywords: ['social media','social network','content platform'],            label: 'Social Media' },\n  { keywords: ['on-demand','digital platform','super app'],                    label: 'Super App' },\n  { keywords: ['cybersecurity','security software','infosec'],                 label: 'Cybersecurity' },\n  { keywords: ['marketplace','classifieds','listing'],                         label: 'Marketplace' },\n  { keywords: ['technology company','tech company','software company'],        label: 'Tech Company' },\n\n  { \n  keywords: [\n    'bank', 'banking', 'commercial bank', 'private bank',\n    'state-owned bank', 'central bank', 'financial institution',\n    'retail banking', 'corporate banking', 'investment bank',\n    'microfinance', 'micro finance', 'loan', 'lending',\n    'credit card', 'debit card', 'atm', 'branch banking'\n  ],\n  label: 'Banking & Financial Services'\n},\n];\nconst extractLower = extractText.toLowerCase();\nfor (const entry of nicheMap) {\n  if (entry.keywords.some(kw => extractLower.includes(kw))) {\n    niche = entry.label;\n    break;\n  }\n}\n\n// STEP 8: Return clean enriched object\nreturn {\n  json: {\n    companyName:      wikiTitle || match?.name || lead.companyName,\n    website:          `https://${domain}`,\n    email:            `info@${domain}`,\n    niche:            niche || 'Tech Startup',\n    location:         location || 'South Asia',\n    wikiSummary:      extractText.slice(0, 150),\n    enrichmentStatus: domain ? 'enriched' : 'failed',\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1232,
+        -752
+      ],
+      "id": "c1d87302-c94a-4757-92b3-7762bdaec5fd",
+      "name": "Transform Data"
+    },
+    {
+      "parameters": {
+        "batchSize": "={{ 1}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        256,
+        -624
+      ],
+      "id": "ecd6c760-0389-4230-875f-ef04ae1b89dd",
+      "name": "Split In Batches"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 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"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.1-8b-instant\",\n  \"max_tokens\": 500,\n  \"temperature\": 0.75,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an elite B2B sales copywriter who writes cold emails that actually get replies. Your emails are:\\n- Specific to the company's industry and city\\n- Conversational and human, never robotic\\n- Short: subject + 3 paragraphs max\\n- Always start with insight about THEIR business, not about you\\n- End with ONE soft CTA (a question, not a pitch)\\n- Sign off as 'The OutreachBot Team'\\n- Never use brackets, placeholders, or generic lines like 'I hope this finds you well'\\n- Never mention 'cold email' or that you found them online\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Write a cold outreach email for this lead:\\n\\nCompany: {{ $json.companyName }}\\nNiche: {{ $json.niche }}\\nWebsite: {{ $json.website }}\\nLocation: {{ $json.location }}\\nWhat they do: {{ $json.wikiSummary }}\\n\\nRequirements:\\n1. Subject line first, format: Subject: ...\\n2. Open with something specific about {{ $json.companyName }} and what they do in {{ $json.location }}\\n3. Middle paragraph: explain how we help companies in the {{ $json.niche }} space specifically\\n4. Close with a soft CTA question\\n5. No fluff, no filler, no placeholders\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1456,
+        -864
+      ],
+      "id": "a3209618-2eee-4d2a-855b-b56be8deb940",
+      "name": "Groq AI - Generate Email"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Extract + Merge (FIXED) ──────────────────────────\n\n// STEP 1: Get enriched lead from Transform Data node\nconst lead = $('Transform Data').item.json;\n\n// STEP 2: Get Groq AI response\nconst raw = $input.item.json;\nconst content = raw?.choices?.[0]?.message?.content || '';\n\n// STEP 3: Split subject and body\nlet subject = '';\nlet body = content;\n\nif (content.includes('Subject:')) {\n  const parts = content.split('\\n');\n  const subjectLine = parts.find(l => l.toLowerCase().startsWith('subject:'));\n  subject = subjectLine\n    ? subjectLine.replace(/subject:/i, '').trim()\n    : '';\n  body = parts\n    .filter(l => !l.toLowerCase().startsWith('subject:'))\n    .join('\\n')\n    .trim();\n}\n\n// STEP 4: Timestamp\nconst timestamp = new Date().toISOString();\n\n// STEP 5: Return — correct n8n format, no contactName\nreturn {\n  json: {\n    companyName:  lead.companyName  || '',\n    website:      lead.website      || '',\n    niche:        lead.niche        || '',\n    location:     lead.location     || '',\n    email:        lead.email        || '',\n    wikiSummary:  lead.wikiSummary  || '',\n    emailSubject: subject,\n    emailBody:    body,\n    status:       content ? 'SUCCESS' : 'FAILED',\n    timestamp:    timestamp,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1616,
+        -688
+      ],
+      "id": "21f56b85-3fcf-45d7-96a5-c530f32a2fae",
+      "name": "Merge Email + Data"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "=1mRCmCzCxNedJLw7Pke7Xb2Qh7H6E1fC8caB282GODe8",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mRCmCzCxNedJLw7Pke7Xb2Qh7H6E1fC8caB282GODe8/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company Name": "={{ $json.companyName }}",
+            " Website": "={{ $json.website }}",
+            "Niche": "={{ $json.niche }}",
+            " Email Subject": "={{ $json.emailSubject }}",
+            "Email Body": "={{ $json.emailBody }}",
+            " Status": "={{ $json.status }}",
+            "Timestamp": "={{ $json.timestamp }}",
+            "email": "={{ $json.email }}",
+            "location": "={{ $json.location }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Company Name",
+              "displayName": "Company Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": " Website",
+              "displayName": " Website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Niche",
+              "displayName": "Niche",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": " Email Subject",
+              "displayName": " Email Subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email Body",
+              "displayName": "Email Body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": " Status",
+              "displayName": " Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1552,
+        -448
+      ],
+      "id": "d3aa1af3-fbf9-4d02-9373-5b4b4792a6cd",
+      "name": "Log Success",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "mbmcKdMjdebw2Mcp",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "=1QzO2GqAgKLHxZShoQ7CerpghGhcsBbX2Xbz5X0QY3Bc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QzO2GqAgKLHxZShoQ7CerpghGhcsBbX2Xbz5X0QY3Bc/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company Name": "={{ $json.companyName }}",
+            " Website": "={{ $json.website }}",
+            "Niche": "={{ $json.niche }}",
+            " Email Subject": "N/A",
+            "Email Body": "N/A",
+            " Status": "FAILED",
+            "Timestamp": "={{ new Date().toISOString() }}",
+            "location": "={{ $json.location }}",
+            "email": "={{ $json.email }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Company Name",
+              "displayName": "Company Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": " Website",
+              "displayName": " Website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Niche",
+              "displayName": "Niche",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": " Email Subject",
+              "displayName": " Email Subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email Body",
+              "displayName": "Email Body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": " Status",
+              "displayName": " Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1168,
+        -480
+      ],
+      "id": "99ee1cc1-b904-41a6-820a-bcc2a968cb81",
+      "name": "Failure Logs",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "mbmcKdMjdebw2Mcp",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1312,
+        1072
+      ],
+      "id": "39a8daed-b3ac-48bb-9eda-3cb1f61c3728",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "16yJ915I0-06pc4lP6ajRKpivYlh0gDCJ2WWYfhgZEMY",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/16yJ915I0-06pc4lP6ajRKpivYlh0gDCJ2WWYfhgZEMY/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        176,
+        -816
+      ],
+      "id": "71a2bf15-85b0-4e61-9475-2b2312ab387d",
+      "name": "Get row(s) in sheet",
+      "retryOnFail": true,
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "mbmcKdMjdebw2Mcp",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Prepare Lead ─────────────────────────────────────\n// Reads company name from Google Sheet\n// Prepares searchQuery and wikiQuery for both HTTP nodes\n\nconst input = $input.item.json;\n\n// Normalize all keys to lowercase to handle any column naming\nconst n = Object.fromEntries(\n  Object.entries(input).map(([k, v]) => [k.toLowerCase().trim(), v])\n);\n\n// Raw company name from sheet\nconst rawCompany = n.company || n.companyname\n  || n['company name'] || '';\n\n// Title case for Wikipedia — \"brac bank\" → \"Brac Bank\"\nconst titleCase = rawCompany\n  .split(' ')\n  .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())\n  .join(' ');\n\n// Wikipedia needs underscores instead of spaces\nconst wikiQuery = titleCase.replace(/ /g, '_');\n\nreturn {\n  json: {\n    companyName: titleCase,\n    searchQuery: rawCompany,   // for Clearbit\n    wikiQuery:   wikiQuery,    // for Wikipedia URL\n    domain:      n.domain || '',\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -864
+      ],
+      "id": "d540ce09-94b2-46fc-9587-617fd87647c3",
+      "name": "Prepare Lead"
+    },
+    {
+      "parameters": {
+        "url": "=https://autocomplete.clearbit.com/v1/companies/suggest?query={{ $json.searchQuery }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": []
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        656,
+        -864
+      ],
+      "id": "79a3bacd-c14e-46a3-9920-7fa4eb071955",
+      "name": "HTTP Request - Clearbit",
+      "executeOnce": false,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "=https://en.wikipedia.org/api/rest_v1/page/summary/{{ $('Prepare Lead').item.json.companyName }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "n8n-lead-enrichment/1.0 (mdsakibahmed848@gmail.com)"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1056,
+        -864
+      ],
+      "id": "b2ef989e-81ee-4a91-9126-29a9921ff17d",
+      "name": "HTTP Request - Wikipedia"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "bce2663f-0ea9-447b-9a46-a51ea7932086",
+              "leftValue": "={{ \n  (\n    Array.isArray($json) && $json.length > 0\n  ) ||\n  (\n    Array.isArray($json.body) && $json.body.length > 0\n  )\n}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        832,
+        -736
+      ],
+      "id": "b2afa7f2-a120-4134-a374-4c80191f24ec",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Transform Data (FAILURE PATH ONLY) ──\n\n// STEP 1: Original lead (from previous node)\nconst lead = $('Prepare Lead').item.json;\n\n// STEP 2: Return clean failure record (NO API usage)\nreturn {\n  json: {\n    companyName: lead.companyName || 'Unknown',\n    website: '',\n    email: '',\n    niche: 'Unknown',\n    location: lead.location || 'Unknown',\n    wikiSummary: '',\n\n    // ❌ explicitly failed\n    enrichmentStatus: 'failed'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        -528
+      ],
+      "id": "c6299284-c696-4adc-ae60-88d99e59fb26",
+      "name": "failure transform"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Menual trigger ": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Prepare Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform Data": {
+      "main": [
+        [
+          {
+            "node": "Groq AI - Generate Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq AI - Generate Email": {
+      "main": [
+        [
+          {
+            "node": "Merge Email + Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Email + Data": {
+      "main": [
+        [
+          {
+            "node": "Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        []
+      ]
+    },
+    "Log Success": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failure Logs": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Lead": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Clearbit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Clearbit": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Wikipedia": {
+      "main": [
+        [
+          {
+            "node": "Transform Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Wikipedia",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "failure transform",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "failure transform": {
+      "main": [
+        [
+          {
+            "node": "Failure Logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "e107055f-a8e5-408f-a542-f9edd7339526",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "abbfd6b423d3c24d74db5b96f5f04ad133266eb62aeb7338ccfdf8062146eaf0"
+  },
+  "id": "kWG2RNp974Tu5eKh",
+  "tags": []
+}
